@@ -81,7 +81,13 @@ fn write_svg_section(out: &mut String, svgs: Vec<BodyNode>) {
     out.push_str("\n\nmod icons {");
     out.push_str("\n    use super::*;");
     for (idx, icon) in svgs.into_iter().enumerate() {
-        let raw = dioxus_autofmt::write_block_out(CallBody { roots: vec![icon] }).unwrap();
+        let raw = dioxus_autofmt::write_block_out(CallBody {
+            comp_info: None,
+            roots: vec![icon],
+            #[cfg(feature = "coscos_feature")]
+            css: None,
+        })
+        .unwrap();
         out.push_str("\n\n    pub fn icon_");
         out.push_str(&idx.to_string());
         out.push_str("(cx: Scope) -> Element {\n        cx.render(rsx! {");

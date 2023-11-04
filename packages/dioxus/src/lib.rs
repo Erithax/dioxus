@@ -21,6 +21,8 @@ pub use dioxus_rsx as rsx;
 #[cfg(feature = "macro")]
 pub use dioxus_core_macro as core_macro;
 
+pub use coscos;
+
 pub mod prelude {
     #[cfg(feature = "hooks")]
     pub use crate::hooks::*;
@@ -39,4 +41,6 @@ pub mod prelude {
 
     #[cfg(all(not(target_arch = "wasm32"), feature = "hot-reload"))]
     pub use dioxus_hot_reload::{self, hot_reload_init};
+
+    pub use coscos;
 }

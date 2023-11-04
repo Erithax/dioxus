@@ -17,6 +17,7 @@
 #[macro_use]
 mod errors;
 mod component;
+mod coscos;
 mod element;
 #[cfg(feature = "hot_reload")]
 pub mod hot_reload;
@@ -27,6 +28,7 @@ use std::{fmt::Debug, hash::Hash};
 
 // Re-export the namespaces into each other
 pub use component::*;
+pub use coscos::*;
 #[cfg(feature = "hot_reload")]
 use dioxus_core::{Template, TemplateAttribute, TemplateNode};
 pub use element::*;
@@ -40,10 +42,14 @@ pub use node::*;
 // imports
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
+use serde;
+use serde_json;
 use syn::{
     parse::{Parse, ParseStream},
     Result, Token,
 };
+
+pub const INNER_COMP_NAME_VAR: &str = "__COMP_NAME";
 
 #[cfg(feature = "hot_reload")]
 // interns a object into a static object, resusing the value if it already exists
@@ -51,10 +57,43 @@ fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(s: impl Into<Intern<T>>
     s.into().as_ref()
 }
 
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct CallBodyComponentInfo {
+    pub comp_name: String,
+}
+
+impl ToTokens for CallBodyComponentInfo {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let s = serde_json::to_string(self).unwrap();
+        let res = syn::LitStr::new(&s, proc_macro2::Span::call_site());
+        *tokens = quote! {
+            #tokens
+            #res
+        }
+    }
+}
+impl Parse for CallBodyComponentInfo {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let lit_str = input.parse::<syn::LitStr>()?;
+
+        return serde_json::from_str(&lit_str.value()).or(Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            &format!(
+                "could not deserialize CallBodyComponentInfo: {}",
+                lit_str.value()
+            ),
+        )));
+    }
+}
+
 /// Fundametnally, every CallBody is a template
 #[derive(Default, Debug)]
 pub struct CallBody {
+    pub comp_info: Option<CallBodyComponentInfo>,
     pub roots: Vec<BodyNode>,
+
+    #[cfg(feature = "coscos_feature")]
+    pub css: Option<String>,
 }
 
 impl CallBody {
@@ -69,6 +108,9 @@ impl CallBody {
         location: &'static str,
     ) -> Option<Template<'static>> {
         let mut renderer: TemplateRenderer = TemplateRenderer {
+            comp_info: &self.comp_info,
+            #[cfg(feature = "coscos_feature")]
+            css: &self.css,
             roots: &self.roots,
             location: None,
         };
@@ -78,6 +120,9 @@ impl CallBody {
     /// Render the template with a manually set file location. This should be used when multiple rsx! calls are used in the same macro
     pub fn render_with_location(&self, location: String) -> TokenStream2 {
         let body = TemplateRenderer {
+            comp_info: &self.comp_info,
+            #[cfg(feature = "coscos_feature")]
+            css: &self.css,
             roots: &self.roots,
             location: Some(location),
         };
@@ -94,6 +139,8 @@ impl Parse for CallBody {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut roots = Vec::new();
 
+        let comp_info = input.parse::<CallBodyComponentInfo>();
+
         while !input.is_empty() {
             let node = input.parse::<BodyNode>()?;
 
@@ -104,14 +151,50 @@ impl Parse for CallBody {
             roots.push(node);
         }
 
-        Ok(Self { roots })
+        if coscos::uses_coscos(&roots) && comp_info.is_err() {
+            return Err(syn::Error::new(proc_macro2::Span::call_site(), format!("
+                `render!{{}}` may only use `coscos{{}}` in a component (mark function with attribute-macro `#[component]`)
+            ")));
+        }
+
+        #[cfg(feature = "coscos_feature")]
+        let css = if coscos::uses_coscos(&roots) {
+            let rsx_block_scope = format!(
+                "{}{}_{}{}",
+                input.span().start().line,
+                input.span().start().column,
+                input.span().end().line,
+                input.span().end().column
+            );
+            coscos::Coscos::coscosate2(
+                &mut roots,
+                &NodeCoscosPath {
+                    comp_scope: comp_info.clone().unwrap().comp_name,
+                    rsx_block_scope: rsx_block_scope,
+                },
+                0,
+            );
+            Some(Coscos::collect_rsx_block_css(&roots))
+        } else {
+            None
+        };
+
+        return Ok(Self {
+            comp_info: comp_info.ok(),
+            roots,
+            #[cfg(feature = "coscos_feature")]
+            css,
+        });
     }
 }
 
 /// Serialize the same way, regardless of flavor
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let body = TemplateRenderer {
+        let body: TemplateRenderer<'_> = TemplateRenderer {
+            comp_info: &self.comp_info,
+            #[cfg(feature = "coscos_feature")]
+            css: &self.css,
             roots: &self.roots,
             location: None,
         };
@@ -130,6 +213,9 @@ pub struct RenderCallBody(pub CallBody);
 impl ToTokens for RenderCallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         let body: TemplateRenderer = TemplateRenderer {
+            comp_info: &self.0.comp_info,
+            #[cfg(feature = "coscos_feature")]
+            css: &self.0.css,
             roots: &self.0.roots,
             location: None,
         };
@@ -144,6 +230,9 @@ impl ToTokens for RenderCallBody {
 }
 
 pub struct TemplateRenderer<'a> {
+    pub comp_info: &'a Option<CallBodyComponentInfo>,
+    #[cfg(feature = "coscos_feature")]
+    pub css: &'a Option<String>,
     pub roots: &'a [BodyNode],
     pub location: Option<String>,
 }
@@ -205,10 +294,20 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
         };
 
         let spndbg = format!("{:?}", self.roots[0].span());
+
         let root_col = spndbg
             .rsplit_once("..")
             .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
             .unwrap_or_default();
+
+        // let roots = if coscos::uses_coscos(self.roots) {
+        //     let mut edited_roots = self.roots.to_vec();
+        //     // let s = &self.comp_info.as_ref().expect("internal error. coscos used without available comp_name. Please report this issue.").comp_name;
+        //     // apply_scope_data_attribute_throughout(&mut edited_roots, s);
+        //     edited_roots
+        // } else {
+        //     self.roots.to_vec()
+        // };
 
         let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
             context.current_path.push(idx as u8);
@@ -217,7 +316,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             out
         });
 
-        let name = match self.location {
+        let name: TokenStream2 = match self.location {
             Some(ref loc) => quote! { #loc },
             None => quote! {
                 concat!(
@@ -240,10 +339,86 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
         let node_paths = context.node_paths.iter().map(|it| quote!(&[#(#it),*]));
         let attr_paths = context.attr_paths.iter().map(|it| quote!(&[#(#it),*]));
 
+        // let message = comp_time_concat!(
+        //     comp_time_concat!("If this >{{", INNER_COMP_NAME_VAR),
+        //     "}}< errors, you forgot to add `#[component]` to the function."
+        // );
+
+        // let message = format!(
+        //     "span is: {:?}\nother is {:?},",
+        //     self.location,
+        //     // self.roots.first().unwrap().span().start(),
+        //     "bonk" // self.roots.first().unwrap().span().source_file().path()
+        // );
+
+        // =============================================================
+
+        // let prefix = if !coscos::uses_coscos(self.roots) {
+        //     TokenStream2::new()
+        // } else if self.comp_info.is_none() {
+        //     // vscode-file://vscode-app/c:/Program%20Files/Microsoft%20VS%20Code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.htmlTHROW ERROR
+        //     panic!("internal error: usage coscos{{}} without #[component] should be validated in parsing stage. Please report this issue.")
+        // } else {
+        //     quote! {}
+        // };
+        // // =============================================================
+        // let printo = format!(
+        //     "{:?}:{:?}:{:?}:{} => {}",
+        //     file!(),
+        //     line!(),
+        //     column!(),
+        //     spndbg,
+        //     root_col
+        // );
+
+        let comp_info_prefix = match self.comp_info {
+            Some(info) => {
+                let name = &info.comp_name;
+                quote! {
+                    static COMP_NAME: &'static str = #name;
+
+                }
+            }
+            None => TokenStream2::new(),
+        };
+
+        out_tokens.append_all(quote! {
+            #comp_info_prefix
+        });
+
+        #[cfg(feature = "coscos_feature")]
+        {
+            let coscos_prefix = match self.css {
+                Some(css) => {
+                    quote! {
+                        static COMPONENT_STYLE: &'static str = #css;
+                        static ONCE_DUD: std::sync::Once = std::sync::Once::new();
+                        ONCE_DUD.call_once(|| {
+                            unsafe {
+                                ::dioxus::coscos::GLOBAL_STYLES.push((COMP_NAME.to_string(), COMPONENT_STYLE));
+                            }
+                        });
+                    }
+                }
+                None => TokenStream2::new(),
+            };
+            out_tokens.append_all(quote! {
+                #coscos_prefix
+            });
+        }
+
+        #[cfg(feature = "coscos_feature")]
+        let coscos_field = quote! {
+            coscos: self.css,
+        };
+        #[cfg(not(feature = "coscos_feature"))]
+        let coscos_field = TokenStream2::new();
+
         out_tokens.append_all(quote! {
             static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
                 name: #name,
                 roots: &[ #roots ],
+                #coscos_field
                 node_paths: &[ #(#node_paths),* ],
                 attr_paths: &[ #(#attr_paths),* ],
             };
@@ -331,6 +506,7 @@ impl DynamicMapping {
             }
 
             BodyNode::Text(text) if text.is_static() => {}
+            BodyNode::Coscos(_) => {}
 
             BodyNode::RawExpr(_)
             | BodyNode::Text(_)
@@ -456,6 +632,10 @@ impl<'a> DynamicContext<'a> {
                     _ => TemplateNode::Dynamic { id: idx },
                 })
             }
+
+            BodyNode::Coscos(_) => {
+                todo!("so missing code very")
+            }
         }
     }
 
@@ -474,7 +654,7 @@ impl<'a> DynamicContext<'a> {
                         let name = match el_name {
                             ElementName::Ident(_) => quote! { #el_name::#name.0 },
                             ElementName::Custom(_) => {
-                                let as_string = name.to_string();
+                                let as_string: String = name.to_string();
                                 quote! { #as_string }
                             }
                         };
@@ -515,6 +695,17 @@ impl<'a> DynamicContext<'a> {
                         quote! { ::dioxus::core::TemplateAttribute::Dynamic { id: #ct } }
                     }
                 });
+
+                // let static_attrs = static_attrs.chain(std::iter::once(
+                //     quote! {
+                //         ::dioxus::core::TemplateAttribute::Static {
+                //             name: ::dioxus::rsx::comp_time_concat!("data-dx-coscos-", __COMP_NAME),
+                //             value: "",
+                //             namespace: None,
+                //         }
+                //     }
+                //     .into(),
+                // ));
 
                 let attrs = quote! { #(#static_attrs),*};
 
@@ -561,6 +752,20 @@ impl<'a> DynamicContext<'a> {
                     }
                     _ => quote! { ::dioxus::core::TemplateNode::Dynamic { id: #ct } },
                 }
+            }
+
+            BodyNode::Coscos(_coscos) => {
+                // println!("{:?}", coscos.body);
+                // let textalicious = &coscos.source_text;
+                // quote! {
+                //     ::dioxus::core::TemplateNode::Element {
+                //         tag: "style",
+                //         namespace: None,
+                //         attrs: &[],
+                //         children: &[::dioxus::core::TemplateNode::Text{text: #textalicious}],
+                //     }
+                // }
+                TokenStream2::new()
             }
         }
     }

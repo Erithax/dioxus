@@ -2,6 +2,7 @@
 use dioxus::prelude::*;
 use dioxus_fullstack::prelude::*;
 
+#[component]
 pub fn app(cx: Scope) -> Element {
     let mut count = use_state(cx, || 0);
     let text = use_state(cx, || "...".to_string());

@@ -74,6 +74,7 @@ impl<'b> VirtualDom {
 
     /// Create this template and write its mutations
     pub(crate) fn create(&mut self, node: &'b VNode<'b>) -> usize {
+        // log::info!("create() called");
         // check for a overriden template
         #[cfg(debug_assertions)]
         {
@@ -146,7 +147,18 @@ impl<'b> VirtualDom {
             )
         };
 
-        node.template
+        #[cfg(feature = "coscos_feature")]
+        {
+            match node.template.coscos {
+                Some(css) => {
+                    let ele_id = self.next_root(template, template.template.roots.len());
+                    self.create_static_text(template.template, ele_id);
+                }
+            }
+        }
+
+        let nodes_count = node
+            .template
             .get()
             .roots
             .iter()
@@ -166,7 +178,12 @@ impl<'b> VirtualDom {
                 }
                 Text { .. } => self.write_static_text_root(node, idx),
             })
-            .sum()
+            .sum();
+
+        #[cfg(feature = "coscos_feature")]
+        return nodes_count + 1;
+        #[cfg(not(feature = "coscos_feature"))]
+        nodes_count
     }
 
     fn write_static_text_root(&mut self, node: &VNode, idx: usize) -> usize {
@@ -423,6 +440,11 @@ impl<'b> VirtualDom {
                 // the byte index of the hot reloaded template could be different
                 new_template.name = template.name;
                 template = new_template;
+            }
+
+            #[cfg(feature = "coscos_feature")]
+            {
+                println!("adding coscos to VDOM");
             }
 
             self.templates

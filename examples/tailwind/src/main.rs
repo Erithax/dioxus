@@ -13,6 +13,12 @@ fn main() {
     dioxus_web::launch(app);
 }
 
+#[component]
+pub fn app(cx: Scope) -> Element {
+    cx.render(rsx! { div {} })
+}
+
+/*
 pub fn app(cx: Scope) -> Element {
     cx.render(rsx!(
         div {
@@ -105,3 +111,4 @@ pub fn RightArrowIcon(cx: Scope) -> Element {
         }
     ))
 }
+*/

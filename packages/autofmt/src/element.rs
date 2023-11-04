@@ -375,6 +375,7 @@ impl Writer<'_> {
                         },
                         BodyNode::ForLoop(_forloop) => return None,
                         BodyNode::IfChain(_chain) => return None,
+                        BodyNode::Coscos(_) => todo!(),
                     }
                 }
 

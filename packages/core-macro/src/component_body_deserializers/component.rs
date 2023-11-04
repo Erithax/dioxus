@@ -16,15 +16,70 @@ To ignore this check, pass the \"",
 
 const INNER_FN_NAME: &str = "__dx_inner_comp";
 
+//static ONCINATOR: Once = Once::new();
+// unsafe {
+//     ONCINATOR.call_once(|| {
+//         println!("foo");
+//         VAL = expensive_computations();
+//     });
+// }
+
 fn get_out_comp_fn(orig_comp_fn: &ItemFn, cx_pat: &Pat) -> ItemFn {
-    let inner_comp_ident = Ident::new(INNER_FN_NAME, orig_comp_fn.sig.ident.span());
+    let inner_comp_ident: Ident = Ident::new(INNER_FN_NAME, orig_comp_fn.sig.ident.span());
+
+    let comp_name = syn::LitStr::new(
+        &orig_comp_fn.sig.ident.to_string(),
+        orig_comp_fn.sig.ident.span(),
+    );
+
+    // let new_stuff: ExprMacro = parse_quote! {
+    //     println!("calling component `{}`", #comp_name)
+    // };
+    let new_stuff: syn::Block = parse_quote! {
+        {
+            println!("calling component `{}`", #comp_name);
+            static COMP_INIT_LOCK: std::sync::Once = std::sync::Once::new();
+            COMP_INIT_LOCK.call_once(|| {
+                println!("initing component `{}`", #comp_name);
+            });
+        }
+    };
+
+    let inner_comp_name_var = Ident::new(
+        dioxus_rsx::INNER_COMP_NAME_VAR,
+        proc_macro2::Span::call_site(),
+    );
+
+    let mut edited_comp_fn = orig_comp_fn.clone();
+    edited_comp_fn.block.stmts.insert(
+        0,
+        parse_quote! {
+            const #inner_comp_name_var: &'static str = #comp_name;
+        },
+    );
+    edited_comp_fn
+        .block
+        .stmts
+        .insert(0, parse_quote! {#new_stuff;});
+
+    let mut visitor = PrependRenderCalls {
+        comp_info: dioxus_rsx::CallBodyComponentInfo {
+            comp_name: orig_comp_fn.sig.ident.to_string(),
+        },
+    };
+    syn::visit_mut::VisitMut::visit_block_mut(&mut visitor, &mut edited_comp_fn.block);
+
+    // orig_comp_fn.block = parse_quote! {
+    //     #new_stuff;
+    //     #orig_comp_fn.block
+    // };
 
     let inner_comp_fn = ItemFn {
         sig: Signature {
             ident: inner_comp_ident.clone(),
             ..orig_comp_fn.sig.clone()
         },
-        ..orig_comp_fn.clone()
+        ..edited_comp_fn.clone()
     };
 
     ItemFn {
@@ -38,6 +93,37 @@ fn get_out_comp_fn(orig_comp_fn: &ItemFn, cx_pat: &Pat) -> ItemFn {
             }
         },
         ..orig_comp_fn.clone()
+    }
+}
+
+struct PrependRenderCalls {
+    comp_info: dioxus_rsx::CallBodyComponentInfo,
+}
+
+impl syn::visit_mut::VisitMut for PrependRenderCalls {
+    fn visit_item_mut(&mut self, i: &mut Item) {
+        // Do not recurse into items defined inside the function body.
+        assert!(true, "nested item {}", quote! {#i}.to_string());
+    }
+
+    fn visit_macro_mut(&mut self, mac: &mut Macro) {
+        let macro_path = mac
+            .path
+            .segments
+            .iter()
+            .fold("".to_string(), |acc, nex| acc + &nex.ident.to_string());
+
+        if macro_path == "render" {
+            let t = &mac.tokens;
+            let prefix = &self.comp_info;
+            mac.tokens = quote! {
+                #prefix
+                #t
+            };
+            // TODO: handle recursive render! calls?
+        } else {
+            // TODO: recurse into other macros?
+        }
     }
 }
 
@@ -56,7 +142,7 @@ pub struct ComponentDeserializerOutput {
 
 impl ToTokens for ComponentDeserializerOutput {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let comp_fn = &self.comp_fn;
+        let comp_fn: &ItemFn = &self.comp_fn;
         let props_struct = &self.props_struct;
 
         tokens.append_all(quote! {

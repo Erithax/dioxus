@@ -25,6 +25,7 @@ pub enum BodyNode {
     IfChain(ExprIf),
     Text(IfmtInput),
     RawExpr(Expr),
+    Coscos(Coscos),
 }
 
 impl BodyNode {
@@ -40,6 +41,7 @@ impl BodyNode {
             BodyNode::RawExpr(exp) => exp.span(),
             BodyNode::ForLoop(fl) => fl.for_token.span(),
             BodyNode::IfChain(f) => f.if_token.span(),
+            BodyNode::Coscos(coscos) => coscos.source_text.span(),
         }
     }
 }
@@ -48,6 +50,15 @@ impl Parse for BodyNode {
     fn parse(stream: ParseStream) -> Result<Self> {
         if stream.peek(LitStr) {
             return Ok(BodyNode::Text(stream.parse()?));
+        }
+
+        let body_stream = stream.fork();
+        if body_stream
+            .parse::<syn::Ident>()
+            .is_ok_and(|id| id.to_string() == "coscos")
+        {
+            // assert!(false, "YES coscos");
+            return Ok(BodyNode::Coscos(stream.parse::<Coscos>()?));
         }
 
         // if this is a dash-separated path, it's a web component (custom element)
@@ -135,7 +146,11 @@ impl ToTokens for BodyNode {
                     pat, expr, body, ..
                 } = exp;
 
+                // TODO
                 let renderer: TemplateRenderer = TemplateRenderer {
+                    comp_info: &None,
+                    #[cfg(feature = "coscos_feature")]
+                    css: &None,
                     roots: body,
                     location: None,
                 };
@@ -216,6 +231,9 @@ impl ToTokens for BodyNode {
                         }
                     });
                 }
+            }
+            BodyNode::Coscos(_) => {
+                todo!("bonktybaby")
             }
         }
     }

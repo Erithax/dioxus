@@ -17,10 +17,14 @@ proc-macro2 = { version = "1.0", features = ["span-locations"] }
 dioxus-core = { workspace = true}
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 quote = { version = "1.0" }
-serde = { version = "1.0", features = ["derive"], optional = true }
+serde = { version = "1.0", features = ["derive"] }
 internment = { version = "0.7.0", optional = true }
 krates = { version = "0.12.6", optional = true }
+rsass = "0.28.2"
+coscos = {workspace = true}
+serde_json = "1.0.107"
+lightningcss = { version = "1.0.0-alpha.49", features = ["visitor"]}
 
 [features]
 hot_reload = ["krates", "internment"]
-serde = ["dep:serde"]
+#serde = ["dep:serde"]

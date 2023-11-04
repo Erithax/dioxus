@@ -13,7 +13,10 @@ use syn::{punctuated::Punctuated, LitStr};
 /// Convert an HTML DOM tree into an RSX CallBody
 pub fn rsx_from_html(dom: &Dom) -> CallBody {
     CallBody {
+        comp_info: None,
         roots: dom.children.iter().filter_map(rsx_node_from_html).collect(),
+        #[cfg(feature = "coscos_feature")]
+        css: None,
     }
 }
 
@@ -25,13 +28,14 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
         Node::Text(text) => Some(BodyNode::Text(ifmt_from_text(text))),
         Node::Element(el) => {
             let el_name = el.name.to_case(Case::Snake);
-            let el_name = ElementName::Ident(Ident::new(el_name.as_str(), Span::call_site()));
+            let el_name: ElementName =
+                ElementName::Ident(Ident::new(el_name.as_str(), Span::call_site()));
 
             let mut attributes: Vec<_> = el
                 .attributes
                 .iter()
                 .map(|(name, value)| {
-                    let ident = if matches!(name.as_str(), "for" | "async" | "type" | "as") {
+                    let ident: Ident = if matches!(name.as_str(), "for" | "async" | "type" | "as") {
                         Ident::new_raw(name.as_str(), Span::call_site())
                     } else {
                         let new_name = name.to_case(Case::Snake);

@@ -182,6 +182,7 @@ impl Debug for LinkProps<'_> {
 /// # );
 /// ```
 #[allow(non_snake_case)]
+#[component]
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let LinkProps {
         active_class,

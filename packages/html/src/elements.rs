@@ -1298,6 +1298,9 @@ builder_constructors! {
     /// element.
     template None {};
 
+    /// Build a `coscos` element, not rendered as such
+    coscos None {};
+
     // SVG components
     /// Build a
     /// [`<svg>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/svg)

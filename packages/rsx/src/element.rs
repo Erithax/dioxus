@@ -245,7 +245,7 @@ impl Parse for ElementName {
             Ok(ElementName::Ident(raw.into_iter().next().unwrap()))
         } else {
             let span = raw.span();
-            let tag = raw
+            let tag: String = raw
                 .into_iter()
                 .map(|ident| ident.to_string())
                 .collect::<Vec<_>>()

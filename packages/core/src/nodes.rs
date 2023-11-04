@@ -52,6 +52,10 @@ pub struct VNode<'a> {
     /// The static nodes and static descriptor of the template
     pub template: Cell<Template<'static>>,
 
+    /// The static coscos
+    #[cfg(feature = "coscos_feature")]
+    pub coscos: Cell<&'static str>,
+
     /// The IDs for the roots of this template - to be used when moving the template around and removing it from
     /// the actual Dom
     pub root_ids: RefCell<bumpalo::collections::Vec<'a, ElementId>>,
@@ -119,6 +123,12 @@ pub struct Template<'a> {
     /// Unlike react, calls to `rsx!` can have multiple roots. This list supports that paradigm.
     #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
     pub roots: &'a [TemplateNode<'a>],
+
+    /// Component scoped styles rendered to css
+    ///
+    /// Only top level (non-nested) template is `Some(_)`
+    #[cfg(feature = "coscos_feature")]
+    pub coscos: Option<&'a str>,
 
     /// The paths of each node relative to the root of the template.
     ///

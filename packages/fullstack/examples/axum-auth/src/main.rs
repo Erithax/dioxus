@@ -74,14 +74,15 @@ fn main() {
     }
 }
 //
+
+#[component]
 fn app(cx: Scope) -> Element {
     let user_name = use_state(cx, || "?".to_string());
     let permissions = use_state(cx, || "?".to_string());
 
     cx.render(rsx! {
         div {
-            button {
-                onclick: move |_| {
+            button { onclick: move |_| {
                     async move {
                         login().await.unwrap();
                     }

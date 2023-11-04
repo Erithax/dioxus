@@ -18,6 +18,7 @@ struct AppProps {
     count: i32,
 }
 
+#[component]
 fn app(cx: Scope<AppProps>) -> Element {
     let state =
         use_server_future(cx, (), |()| async move { get_server_data().await.unwrap() })?.value();

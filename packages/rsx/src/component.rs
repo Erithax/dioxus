@@ -162,7 +162,11 @@ impl ToTokens for Component {
                 }
 
                 if !self.children.is_empty() {
+                    // TODO
                     let renderer: TemplateRenderer = TemplateRenderer {
+                        comp_info: &None,
+                        #[cfg(feature = "coscos_feature")]
+                        css: &None,
                         roots: &self.children,
                         location: None,
                     };

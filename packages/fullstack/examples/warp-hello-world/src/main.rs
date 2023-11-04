@@ -15,6 +15,7 @@ struct AppProps {
     count: i32,
 }
 
+#[component]
 fn app(cx: Scope<AppProps>) -> Element {
     let state =
         use_server_future(cx, (), |()| async move { get_server_data().await.unwrap() })?.value();
@@ -23,9 +24,7 @@ fn app(cx: Scope<AppProps>) -> Element {
     let text = use_state(cx, || "...".to_string());
 
     cx.render(rsx! {
-        div {
-            "Server state: {state}"
-        }
+        div { "Server state: {state}" }
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }

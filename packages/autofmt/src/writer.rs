@@ -54,6 +54,7 @@ impl<'a> Writer<'a> {
             BodyNode::RawExpr(exp) => self.write_raw_expr(exp.span()),
             BodyNode::ForLoop(forloop) => self.write_for_loop(forloop),
             BodyNode::IfChain(ifchain) => self.write_if_chain(ifchain),
+            BodyNode::Coscos(_) => todo!(),
         }
     }
 

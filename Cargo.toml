@@ -20,6 +20,7 @@ members = [
     "packages/autofmt",
     "packages/check",
     "packages/rsx",
+    "packages/coscos",
     "packages/dioxus-tui",
     "packages/rink",
     "packages/native-core",
@@ -42,6 +43,7 @@ members = [
     "examples/PWA-example",
     "examples/query_segments_demo",
     "examples/openid_connect_demo",
+    "examples/coscos",
     # Playwright tests
     "playwright-tests/liveview",
     "playwright-tests/web",
@@ -71,6 +73,7 @@ dioxus-liveview = { path = "packages/liveview", version = "0.4.0"  }
 dioxus-autofmt = { path = "packages/autofmt", version = "0.4.0"  }
 dioxus-check = { path = "packages/check", version = "0.4.0"  }
 dioxus-rsx = { path = "packages/rsx", version = "0.4.0"  }
+coscos = {path = "packages/coscos"}
 dioxus-tui = { path = "packages/dioxus-tui", version = "0.4.0"  }
 plasmo = { path = "packages/rink", version = "0.4.0" }
 dioxus-native-core = { path = "packages/native-core", version = "0.4.0" }

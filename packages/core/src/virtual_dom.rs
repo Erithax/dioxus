@@ -185,6 +185,8 @@ pub struct VirtualDom {
     // Maps a template path to a map of byteindexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
 
+    // pub(crate) coscos:
+
     // Every element is actually a dual reference - one to the template and the other to the dynamic node in that template
     pub(crate) elements: Slab<ElementRef>,
 
@@ -570,6 +572,12 @@ impl VirtualDom {
         }
 
         self.finalize()
+    }
+
+    #[cfg(feature = "coscos_feature")]
+    pub fn rebuild_coscos(&self) {
+        let styles: Vec<&'static str> = Vec::new();
+        for scope in self.scopes.iter() {}
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress

@@ -127,7 +127,8 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
     // Intialize hot reloading if it is enabled
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     dioxus_hot_reload::connect({
-        let proxy = proxy.clone();
+        let proxy: EventLoopProxy<UserWindowEvent> = proxy.clone();
+        let proxy: EventLoopProxy<UserWindowEvent> = proxy.clone();
         move |template| {
             let _ = proxy.send_event(UserWindowEvent(
                 EventData::HotReloadEvent(template),
@@ -138,7 +139,8 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
     // We start the tokio runtime *on this thread*
     // Any future we poll later will use this runtime to spawn tasks and for IO
-    let rt = tokio::runtime::Builder::new_multi_thread()
+    let rt: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
+    let rt: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap();
@@ -155,7 +157,8 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
     let queue = WebviewQueue::default();
 
-    let shortcut_manager = ShortcutRegistry::new(&event_loop);
+    let shortcut_manager: ShortcutRegistry = ShortcutRegistry::new(&event_loop);
+    let shortcut_manager: ShortcutRegistry = ShortcutRegistry::new(&event_loop);
 
     // move the props into a cell so we can pop it out later to create the first window
     // iOS panics if we create a window before the event loop is started
@@ -324,7 +327,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                 }
 
                 EventData::Ipc(msg) if msg.method() == "initialize" => {
-                    let view = webviews.get_mut(&event.1).unwrap();
+                    let view: &mut WebviewHandler = webviews.get_mut(&event.1).unwrap();
                     send_edits(view.dom.rebuild(), &view.desktop_context.webview);
                     view.desktop_context
                         .webview
@@ -429,7 +432,7 @@ struct WebviewHandler {
 ///
 /// All IO is done on the tokio runtime we started earlier
 fn poll_vdom(view: &mut WebviewHandler) {
-    let mut cx = std::task::Context::from_waker(&view.waker);
+    let mut cx: std::task::Context<'_> = std::task::Context::from_waker(&view.waker);
 
     loop {
         {
