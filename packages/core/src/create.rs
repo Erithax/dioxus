@@ -74,7 +74,7 @@ impl<'b> VirtualDom {
 
     /// Create this template and write its mutations
     pub(crate) fn create(&mut self, node: &'b VNode<'b>) -> usize {
-        // log::info!("create() called");
+        println!("create() called");
         // check for a overriden template
         #[cfg(debug_assertions)]
         {
@@ -94,6 +94,12 @@ impl<'b> VirtualDom {
             let len = node.template.get().roots.len();
             nodes_mut.resize(len, ElementId::default());
         };
+
+        let mut nodes_count = 0;
+        #[cfg(feature = "coscos_feature")]
+        {
+            nodes_count += self.write_coscos(node);
+        }
 
         // The best renderers will have templates prehydrated and registered
         // Just in case, let's create the template using instructions anyways
@@ -147,17 +153,7 @@ impl<'b> VirtualDom {
             )
         };
 
-        #[cfg(feature = "coscos_feature")]
-        {
-            match node.template.coscos {
-                Some(css) => {
-                    let ele_id = self.next_root(template, template.template.roots.len());
-                    self.create_static_text(template.template, ele_id);
-                }
-            }
-        }
-
-        let nodes_count = node
+        nodes_count += node
             .template
             .get()
             .roots
@@ -178,11 +174,8 @@ impl<'b> VirtualDom {
                 }
                 Text { .. } => self.write_static_text_root(node, idx),
             })
-            .sum();
+            .sum::<usize>();
 
-        #[cfg(feature = "coscos_feature")]
-        return nodes_count + 1;
-        #[cfg(not(feature = "coscos_feature"))]
         nodes_count
     }
 
@@ -236,7 +229,7 @@ impl<'b> VirtualDom {
         dynamic_nodes: &[(usize, &'static [u8])],
     ) -> usize {
         // Load the template root and get the ID for the node on the stack
-        let root_on_stack = self.load_template_root(template, root_idx);
+        let root_on_stack: ElementId = self.load_template_root(template, root_idx);
 
         // Write all the attributes below this root
         self.write_attrs_on_root(dynamic_attrs, root_idx as u8, root_on_stack, template);
@@ -347,7 +340,7 @@ impl<'b> VirtualDom {
 
     fn load_template_root(&mut self, template: &VNode, root_idx: usize) -> ElementId {
         // Get an ID for this root since it's a real root
-        let this_id = self.next_root(template, root_idx);
+        let this_id: ElementId = self.next_root(template, root_idx);
         template.root_ids.borrow_mut()[root_idx] = this_id;
 
         self.mutations.push(LoadTemplate {
@@ -391,6 +384,7 @@ impl<'b> VirtualDom {
 
     /// Insert a new template into the VirtualDom's template registry
     pub(crate) fn register_template_first_byte_index(&mut self, mut template: Template<'static>) {
+        println!("register_template_first_byte_index() {}", template.name);
         // First, make sure we mark the template as seen, regardless if we process it
         let (path, _) = template.name.rsplit_once(':').unwrap();
         if let Some((_, old_template)) = self
@@ -417,10 +411,90 @@ impl<'b> VirtualDom {
         }
     }
 
+    #[cfg(feature = "coscos_feature")]
+    fn write_coscos(&mut self, vnode: &VNode) -> usize {
+        use std::hash::Hasher;
+        println!("write_coscos");
+        let (path, byte_index) = vnode.template.get().name.rsplit_once(':').unwrap();
+        let byte_index = byte_index.parse::<usize>().unwrap();
+
+        if self
+            .templates
+            .get(&path)
+            .filter(|set| set.contains_key(&byte_index))
+            .is_none()
+            && vnode.template.get().coscos.is_some()
+        {
+            println!("writing coscos of {}", path);
+
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            hasher.write(&vnode.template.get().name.as_bytes());
+            hasher.write(vnode.template.get().coscos.unwrap().as_bytes());
+
+            let name = format!("{:x}:{}:{}:{}:{}", hasher.finish(), 999, 999, 999, 99999);
+
+            let tempy = Box::leak(Box::new(Template {
+                name: Box::leak(Box::new(name.clone())),
+                roots: Box::leak(Box::new([TemplateNode::Element {
+                    tag: "style",
+                    namespace: None,
+                    attrs: &[],
+                    children: Box::leak(Box::new([TemplateNode::Text {
+                        text: vnode.template.get().coscos.unwrap(),
+                    }])),
+                }])),
+                coscos: None,
+                node_paths: &[],
+                attr_paths: &[],
+            }));
+
+            self.register_template(*tempy);
+
+            let entry = self.elements.vacant_entry();
+            let ele_id = ElementId(entry.key());
+
+            let vnode = Box::leak(Box::new(VNode {
+                key: None,
+                parent: Some(ElementId(0)),
+                template: Cell::new(*tempy),
+                root_ids: bumpalo::collections::Vec::with_capacity_in(
+                    1,
+                    self.scopes.get(ScopeId::ROOT.0).unwrap().bump(),
+                )
+                .into(),
+                dynamic_nodes: &[],
+                dynamic_attrs: &[],
+            }));
+
+            entry.insert(super::arena::ElementRef {
+                template: Some(unsafe {
+                    std::ptr::NonNull::new_unchecked(vnode as *const _ as *mut _)
+                }),
+                path: super::arena::ElementPath::Root(0),
+                scope: ScopeId::ROOT,
+            });
+
+            // let ele_id = self.next_static_rootscope_reference(vnode);
+            self.mutations.push(LoadTemplate {
+                name: Box::leak(Box::new(name)),
+                index: 0,
+                id: ele_id,
+            });
+            // self.mutations.push(PushRoot { id: ele_id });
+            // self.mutations.push(AppendChildren {
+            //     id: ElementId(0),
+            //     m: 1,
+            // });
+            return 1;
+        }
+        return 0;
+    }
+
     /// Insert a new template into the VirtualDom's template registry
     // used in conditional compilation
     #[allow(unused_mut)]
     pub(crate) fn register_template(&mut self, mut template: Template<'static>) {
+        println!("register_template {}", template.name);
         let (path, byte_index) = template.name.rsplit_once(':').unwrap();
         let byte_index = byte_index.parse::<usize>().unwrap();
         // First, check if we've already seen this template
@@ -430,6 +504,7 @@ impl<'b> VirtualDom {
             .filter(|set| set.contains_key(&byte_index))
             .is_none()
         {
+            println!("new template!");
             // if hot reloading is enabled, then we need to check for a template that has overriten this one
             #[cfg(debug_assertions)]
             if let Some(mut new_template) = self
@@ -445,6 +520,13 @@ impl<'b> VirtualDom {
             #[cfg(feature = "coscos_feature")]
             {
                 println!("adding coscos to VDOM");
+                // match template.get().coscos {
+                //     Some(css) => {
+                //         // let ele_id = self.next_root(node, template.get().roots.len());
+                //         self.create_static_text(css, ele_id);
+                //     }
+                //     None => {}
+                // }
             }
 
             self.templates

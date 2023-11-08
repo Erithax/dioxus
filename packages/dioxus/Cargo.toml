@@ -27,7 +27,7 @@ macro = ["dioxus-core-macro", "dioxus-rsx"]
 html = ["dioxus-html"]
 hooks = ["dioxus-hooks"]
 hot-reload = ["dioxus-hot-reload"]
-coscos_feature = []
+coscos_feature = ["dioxus-rsx/coscos_feature", "dioxus-core/coscos_feature", "dioxus-core-macro/coscos_feature"]
 
 [dev-dependencies]
 futures-util = { workspace = true }

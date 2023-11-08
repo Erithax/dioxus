@@ -274,6 +274,8 @@ impl<'a> TemplateRenderer<'a> {
                     .collect::<Vec<_>>()
                     .as_slice(),
             ),
+            #[cfg(feature = "coscos_feature")]
+            coscos: Some(""),
         })
     }
 }
@@ -407,12 +409,24 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             });
         }
 
-        #[cfg(feature = "coscos_feature")]
-        let coscos_field = quote! {
-            coscos: self.css,
+        let coscos_field = {
+            #[cfg(feature = "coscos_feature")]
+            match self.css {
+                Some(css) => {
+                    quote! {
+                        coscos: Some(
+                            #css
+                        ),
+                    }
+                }
+                None => {
+                    quote! {coscos: None,}
+                }
+            }
+
+            #[cfg(not(feature = "coscos_feature"))]
+            TokenStream2::new()
         };
-        #[cfg(not(feature = "coscos_feature"))]
-        let coscos_field = TokenStream2::new();
 
         out_tokens.append_all(quote! {
             static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {

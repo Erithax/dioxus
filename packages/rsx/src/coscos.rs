@@ -129,18 +129,21 @@ impl ToTokens for Coscos {
     }
 }
 
+#[cfg(feature = "coscos_feature")]
 const OUT_FORMAT: &'static rsass::output::Format = &rsass::output::Format {
     style: rsass::output::Style::Compressed,
     precision: 5,
 };
 
 impl Coscos {
+    #[cfg(feature = "shoobaloo")]
     pub fn coscosate(roots: &mut Vec<BodyNode>) {
         roots.iter_mut().for_each(|root| {
             let _ = Self::rec_coscosate_from(root, &mut Vec::new());
         });
     }
 
+    #[cfg(feature = "shoobaloo")]
     pub fn rec_coscosate_from(
         from: &mut BodyNode,
         curr_element_stack: &mut Vec<String>,
@@ -225,6 +228,7 @@ impl Coscos {
         }
     }
 
+    #[cfg(feature = "coscos_feature")]
     pub fn gather_coscos(roots: &[BodyNode]) -> Vec<Coscos> {
         let mut res = Vec::new();
         for root in roots.iter() {
@@ -233,6 +237,7 @@ impl Coscos {
         return res;
     }
 
+    #[cfg(feature = "coscos_feature")]
     pub fn gather_coscos_from(node: &BodyNode) -> Vec<Coscos> {
         match node {
             BodyNode::Text(_) => Vec::new(),
@@ -257,7 +262,8 @@ impl Coscos {
         }
     }
 
-    pub fn coscosate2_at(node: &mut BodyNode, coscos_path: &NodeCoscosPath, mut curr_id: usize) {
+    #[cfg(feature = "coscos_feature")]
+    pub fn coscosate2_at(node: &mut BodyNode, coscos_path: &NodeCoscosPath, curr_id: &mut usize) {
         match node {
             BodyNode::Text(_) | BodyNode::RawExpr(_) | BodyNode::Component(_) => {}
             BodyNode::Element(e) => {
@@ -281,30 +287,31 @@ impl Coscos {
                     },
                 });
                 for child in e.children.iter_mut() {
-                    curr_id += 1;
+                    *curr_id += 1;
                     Coscos::coscosate2_at(child, coscos_path, curr_id);
                 }
             }
             BodyNode::ForLoop(f) => {
                 for child in f.body.iter_mut() {
-                    curr_id += 1;
                     Coscos::coscosate2_at(child, coscos_path, curr_id);
                 }
             }
             BodyNode::IfChain(_) => {}
             BodyNode::Coscos(c) => {
                 assert!(c.coscos_path.is_none(), "internal error: tried to set coscos_path twice on same node. Please report this issue");
-                c.coscos_path = Some((coscos_path.clone(), curr_id));
+                c.coscos_path = Some((coscos_path.clone(), *curr_id));
             }
         }
     }
 
     pub fn coscosate2(nodes: &mut Vec<BodyNode>, coscos_path: &NodeCoscosPath, curr_id: usize) {
+        let mut curr_id = curr_id.clone();
         for node in nodes.iter_mut() {
-            Coscos::coscosate2_at(node, coscos_path, curr_id);
+            Coscos::coscosate2_at(node, coscos_path, &mut curr_id);
         }
     }
 
+    #[cfg(feature = "coscos_feature")]
     pub fn get_scoped_css_text(&self) -> String {
         use lightningcss::printer::PrinterOptions;
         use lightningcss::stylesheet::{ParserOptions, StyleSheet};
@@ -325,6 +332,7 @@ impl Coscos {
         return ss.to_css(PrinterOptions::default()).unwrap().code;
     }
 
+    #[cfg(feature = "coscos_feature")]
     pub fn collect_rsx_block_css(roots: &Vec<BodyNode>) -> String {
         let mut res = "".to_string();
         for root in roots.iter() {
@@ -333,6 +341,7 @@ impl Coscos {
         res
     }
 
+    #[cfg(feature = "coscos_feature")]
     pub fn collect_rsx_block_css_at(body_node: &BodyNode) -> String {
         match body_node {
             BodyNode::Coscos(c) => c.get_scoped_css_text(),

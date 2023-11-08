@@ -48,6 +48,7 @@ impl<'a> Mutations<'a> {
 
     /// Push a new mutation into the dom_edits list
     pub(crate) fn push(&mut self, mutation: Mutation<'static>) {
+        println!("mutation push {:?}", mutation);
         self.edits.push(mutation)
     }
 }

@@ -29,3 +29,4 @@ trybuild = "1.0"
 
 [features]
 default = []
+coscos_feature = ["dioxus-rsx/coscos_feature"]

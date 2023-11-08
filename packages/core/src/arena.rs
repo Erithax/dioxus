@@ -50,7 +50,7 @@ impl VirtualDom {
     }
 
     pub(crate) fn next_null(&mut self) -> ElementId {
-        let entry = self.elements.vacant_entry();
+        let entry: slab::VacantEntry<'_, ElementRef> = self.elements.vacant_entry();
         let id = entry.key();
 
         entry.insert(ElementRef::none());
@@ -67,6 +67,18 @@ impl VirtualDom {
             template: Some(unsafe { NonNull::new_unchecked(template as *const _ as *mut _) }),
             path,
             scope,
+        });
+        ElementId(id)
+    }
+
+    #[cfg(feature = "coscos_feature")]
+    pub(crate) fn next_static_rootscope_reference(&mut self, vnode: &VNode) -> ElementId {
+        let entry = self.elements.vacant_entry();
+        let id: usize = entry.key();
+        entry.insert(ElementRef {
+            template: Some(unsafe { NonNull::new_unchecked(vnode as *const _ as *mut _) }),
+            path: ElementPath::Root(0),
+            scope: ScopeId::ROOT,
         });
         ElementId(id)
     }

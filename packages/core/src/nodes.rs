@@ -52,10 +52,6 @@ pub struct VNode<'a> {
     /// The static nodes and static descriptor of the template
     pub template: Cell<Template<'static>>,
 
-    /// The static coscos
-    #[cfg(feature = "coscos_feature")]
-    pub coscos: Cell<&'static str>,
-
     /// The IDs for the roots of this template - to be used when moving the template around and removing it from
     /// the actual Dom
     pub root_ids: RefCell<bumpalo::collections::Vec<'a, ElementId>>,
@@ -78,6 +74,8 @@ impl<'a> VNode<'a> {
             dynamic_attrs: &[],
             template: Cell::new(Template {
                 name: "dioxus-empty",
+                #[cfg(feature = "coscos_feature")]
+                coscos: None,
                 roots: &[],
                 node_paths: &[],
                 attr_paths: &[],
